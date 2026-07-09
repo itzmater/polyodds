@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyodds"
+version = "0.1.0"
+description = "A dependency-free CLI for live Polymarket prediction-market odds, search, and price history."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["polymarket", "prediction-markets", "betting", "odds", "cli"]
+authors = [{ name = "itzmater" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/itzmater/polyodds"
+Repository = "https://github.com/itzmater/polyodds"
+
+[project.scripts]
+polyodds = "polyodds.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["polyodds*"]

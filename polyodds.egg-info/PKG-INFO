@@ -1,0 +1,77 @@
+Metadata-Version: 2.4
+Name: polyodds
+Version: 0.1.0
+Summary: A dependency-free CLI for live Polymarket prediction-market odds, search, and price history.
+Author: itzmater
+License: MIT
+Project-URL: Homepage, https://github.com/itzmater/polyodds
+Project-URL: Repository, https://github.com/itzmater/polyodds
+Keywords: polymarket,prediction-markets,betting,odds,cli
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# polyodds
+
+A small, **dependency-free** Python CLI for pulling **live Polymarket** prediction-market odds, searching markets, and tracking price history. Prices *are* probabilities: a market showing `Yes 65.2%` means the crowd thinks there's a 65.2% chance.
+
+Built with only the Python standard library — no `requests`, no pandas, nothing to `pip install` beyond the package itself.
+
+## Install
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+### Search markets by keyword
+
+```bash
+polyodds search "fed rate cut" -n 5
+```
+
+```
+Top 5 markets for 'fed rate cut':
+1. Will the Fed cut rates in September?
+    Yes  62.4%   No  37.6%   vol $4.2M
+    id: 0x9f1c...
+```
+
+### Show one market's current odds
+
+```bash
+polyodds market --slug "will-the-fed-cut-rates"
+# or by conditionId:
+polyodds market -i 0x9f1c...
+```
+
+### Track a market's price history
+
+```bash
+polyodds track --slug "will-the-fed-cut-rates" -d 30
+```
+
+```
+Will the Fed cut rates in September?
+Last 30 daily Yes-price points (oldest -> newest):
+  2026-06-09  Yes  48.0%
+  2026-06-10  Yes  51.3%
+  ...
+  2026-07-09  Yes  62.4%
+  ---
+  48.0% -> 62.4%  (+14.4 pts over 30d)
+```
+
+## APIs
+
+- **Gamma API** (`gamma-api.polymarket.com`) — discovery, search, browse
+- **CLOB API** (`clob.polymarket.com`) — real-time prices, history
+
+All endpoints are read-only and require no authentication.
+
+## License
+
+MIT
