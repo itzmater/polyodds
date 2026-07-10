@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """Self-bootstrapping polyodds alert notifier for cron.
 
-Designed for an ephemeral sandbox: clones the repo fresh each run, reads the
-committed watchlist.json, checks live prices, and (if anything fired) posts
-the formatted alert block to the Telegram chat via the bot token from env.
+On an ephemeral sandbox the repo may be gone, so we ensure a local copy
+exists (clone once into a fixed path), then run the ``polyodds notify``
+console script with POLYODDS_WATCHLIST pointing at the committed
+watchlist.json. If anything fired, the formatted alert block is posted to
+the Telegram chat via the bot token from the environment.
 
-Stdout is the alert text (or empty when quiet) so a cron wrapper can deliver it.
+Stdout is the alert text (or empty when quiet) so a cron wrapper can also
+deliver it as a fallback.
 """
 
-import io
 import json
 import os
 import subprocess
 import sys
-import tempfile
 import urllib.request
 
 REPO = "https://github.com/itzmater/polyodds.git"
+LOCAL = os.path.expanduser("~/polyodds")
 CHAT_ID = "415991812"
-WATCHLIST = "watchlist.json"  # committed in repo root
+WATCHLIST = os.path.join(LOCAL, "watchlist.json")
 
 
 def post_to_telegram(token: str, chat_id: str, text: str) -> bool:
@@ -37,33 +39,31 @@ def post_to_telegram(token: str, chat_id: str, text: str) -> bool:
         return False
 
 
+def ensure_repo() -> None:
+    if not os.path.isdir(os.path.join(LOCAL, ".git")):
+        subprocess.run(["git", "clone", "-q", REPO, LOCAL], check=True)
+
+
 def main() -> int:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         print("[notify] TELEGRAM_BOT_TOKEN not set", file=sys.stderr)
         return 2
-
-    # Clone fresh into a temp dir (sandbox is ephemeral).
-    work = tempfile.mkdtemp(prefix="polyodds_")
     try:
-        subprocess.run(
-            ["git", "clone", "-q", REPO, work],
-            check=True,
-            capture_output=True,
-        )
+        ensure_repo()
     except subprocess.CalledProcessError as e:
-        print(f"[notify] clone failed: {e.stderr.decode()}", file=sys.stderr)
+        print(f"[notify] clone failed: {e}", file=sys.stderr)
         return 2
 
-    # Install (editable, no deps) + run notify against the committed watchlist.
-    env = dict(os.environ, POLYODDS_WATCHLIST=os.path.join(work, WATCHLIST))
+    # Install once (console script 'polyodds' created) — quiet if already done.
     subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-q", "-e", work],
+        [sys.executable, "-m", "pip", "install", "-q", "-e", LOCAL],
         capture_output=True,
     )
+    env = dict(os.environ, POLYODDS_WATCHLIST=WATCHLIST)
     proc = subprocess.run(
-        [sys.executable, "-m", "polyodds.cli", "notify"],
-        cwd=work,
+        ["polyodds", "notify"],
+        cwd=LOCAL,
         env=env,
         capture_output=True,
         text=True,
@@ -72,9 +72,8 @@ def main() -> int:
     if proc.returncode == 0 or not alert_text:
         return 0  # quiet
 
-    # Something fired — deliver to Telegram.
     ok = post_to_telegram(token, CHAT_ID, alert_text)
-    print(alert_text)  # also emit to cron stdout for Hermes delivery fallback
+    print(alert_text)  # also emit to cron stdout for Hermes fallback delivery
     return 0 if ok else 1
 
 
