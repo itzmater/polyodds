@@ -7,8 +7,9 @@ import datetime as _dt
 import sys
 from typing import List
 
-from . import client
+from . import client, watch
 from .client import Market, PolyOddsError
+from .watch import DEFAULT_PATH, WatchError
 
 
 def _fmt_vol(v: float) -> str:
@@ -78,6 +79,92 @@ def cmd_track(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_watch(args: argparse.Namespace) -> int:
+    try:
+        if args.slug:
+            m = client.get_market_by_slug(args.slug)
+        else:
+            m = client.get_market(args.condition_id)
+        w = watch.add_watch(
+            m.condition_id,
+            name=m.question,
+            above=args.above,
+            below=args.below,
+            moved=args.moved,
+        )
+    except (PolyOddsError, WatchError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    triggers = []
+    if w.above is not None:
+        triggers.append(f"above {w.above}%")
+    if w.below is not None:
+        triggers.append(f"below {w.below}%")
+    if w.moved is not None:
+        triggers.append(f"moved {w.moved}pts")
+    print(f"watching: {m.question}")
+    print(f"  id: {w.condition_id}")
+    print(f"  triggers: {', '.join(triggers)}")
+    print(f"  watchlist: {DEFAULT_PATH}")
+    return 0
+
+
+def cmd_unwatch(args: argparse.Namespace) -> int:
+    try:
+        removed = watch.remove_watch(args.condition_id)
+    except WatchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if removed:
+        print(f"removed watch for {args.condition_id}")
+        return 0
+    print(f"no watch found for {args.condition_id}")
+    return 1
+
+
+def cmd_list_watches(args: argparse.Namespace) -> int:
+    try:
+        watches = watch.load_watches()
+    except WatchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if not watches:
+        print("watchlist is empty — add one with: polyodds watch -i <id> --above 60")
+        return 0
+    print(f"{len(watches)} watched market(s):")
+    for w in watches.values():
+        trigs = []
+        if w.above is not None:
+            trigs.append(f"above {w.above}%")
+        if w.below is not None:
+            trigs.append(f"below {w.below}%")
+        if w.moved is not None:
+            trigs.append(f"moved {w.moved}pts")
+        last = f" (last seen {w.last_yes}%)" if w.last_yes is not None else ""
+        print(f"  {w.name}")
+        print(f"    id: {w.condition_id}  | {', '.join(trigs)}{last}")
+    return 0
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    try:
+        fired = watch.eval_watches()
+    except WatchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if not fired:
+        print("no alerts — all watches quiet")
+        return 0
+    print(f"{len(fired)} alert(s) firing:")
+    for a in fired:
+        print(f"  {a.name}")
+        print(f"    id: {a.condition_id}  | Yes {a.yes_pct}%")
+        for r in a.reasons:
+            print(f"    - {r}")
+    # Non-zero exit so this command can gate a cron/CI step.
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="polyodds",
@@ -102,6 +189,25 @@ def build_parser() -> argparse.ArgumentParser:
     gt.add_argument("--slug", help="market URL slug")
     t.add_argument("-d", "--days", type=int, default=30, help="history window (default 30)")
     t.set_defaults(func=cmd_track)
+
+    w = sub.add_parser("watch", help="add a market to your alert watchlist")
+    gw = w.add_mutually_exclusive_group(required=True)
+    gw.add_argument("-i", "--condition-id", help="market conditionId")
+    gw.add_argument("--slug", help="market URL slug")
+    w.add_argument("--above", type=float, help="alert when Yes% crosses above this")
+    w.add_argument("--below", type=float, help="alert when Yes% crosses below this")
+    w.add_argument("--moved", type=float, help="alert when Yes% moves this many pts since last check")
+    w.set_defaults(func=cmd_watch)
+
+    u = sub.add_parser("unwatch", help="remove a market from your watchlist")
+    u.add_argument("-i", "--condition-id", required=True, help="market conditionId to remove")
+    u.set_defaults(func=cmd_unwatch)
+
+    lw = sub.add_parser("watches", help="list your current watchlist")
+    lw.set_defaults(func=cmd_list_watches)
+
+    a = sub.add_parser("check", help="check watches against live prices; fires alerts")
+    a.set_defaults(func=cmd_check)
 
     return p
 

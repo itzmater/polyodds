@@ -57,6 +57,32 @@ Last 30 daily Yes-price points (oldest -> newest):
   48.0% -> 62.4%  (+14.4 pts over 30d)
 ```
 
+### Watch markets and get alerts
+
+Build a local watchlist and have `polyodds` tell you when a market crosses a
+price or moves sharply.
+
+```bash
+# Alert when this market's Yes% goes above 60 or below 30
+polyodds watch -i 0xf299f84f... --above 60 --below 30
+
+# Alert when the Yes% moves 5+ points since the last check
+polyodds watch -i 0xf299f84f... --moved 5
+
+# List what you're watching (with last-seen price)
+polyodds watches
+
+# Check everything against live prices. Fires alerts, exits non-zero if any fired
+polyodds check
+
+# Stop watching
+polyodds unwatch -i 0xf299f84f...
+```
+
+The watchlist lives at `~/.polyodds/watchlist.json`. Because `check` exits
+with code `1` when an alert fires (and `0` when quiet), it pairs perfectly with
+a cron job or CI step that only notifies you on movement.
+
 ## APIs
 
 - **Gamma API** (`gamma-api.polymarket.com`) — discovery, search, browse
