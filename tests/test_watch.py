@@ -116,6 +116,42 @@ def test_load_watches_bad_json(tmp_path_factory_):
         load_watches(tmp_path_factory_)
 
 
+def test_notify_emits_block_when_firing(tmp_path_factory_):
+    from polyodds.cli import cmd_notify
+    import argparse, io, contextlib
+
+    add_watch("cidN", name="NotifyMe", above=40.0, path=tmp_path_factory_)
+    fake = Market("NotifyMe", "cidN", 0.75, 0.25, 0.0)
+    with mock.patch.object(watch.client, "get_market", return_value=fake):
+        # cmd_notify -> eval_watches() uses watch.DEFAULT_PATH; point it at temp
+        saved = watch.DEFAULT_PATH
+        watch.DEFAULT_PATH = tmp_path_factory_
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = cmd_notify(argparse.Namespace())
+        finally:
+            watch.DEFAULT_PATH = saved
+    assert rc == 1
+    out = buf.getvalue()
+    assert "polyodds alert" in out
+    assert "NotifyMe" in out
+
+
+def test_notify_quiet_when_no_fire(tmp_path_factory_):
+    from polyodds.cli import cmd_notify
+    import argparse, io, contextlib
+
+    add_watch("cidQ", name="Quiet", above=95.0, path=tmp_path_factory_)
+    fake = Market("Quiet", "cidQ", 0.30, 0.70, 0.0)
+    with mock.patch.object(watch.client, "get_market", return_value=fake):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cmd_notify(argparse.Namespace())
+    assert rc == 0
+    assert buf.getvalue().strip() == ""
+
+
 # ---------------------------------------------------------------------------
 # Live integration test (network) — opt-in via `python tests/test_watch.py --live`
 # ---------------------------------------------------------------------------

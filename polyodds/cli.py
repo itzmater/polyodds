@@ -165,6 +165,31 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_notify(args: argparse.Namespace) -> int:
+    """Check watches and emit a single formatted block for chat delivery.
+
+    Intended for cron: prints nothing (exit 0) when quiet, or a clean
+    Telegram-ready alert block (exit 1) when something fired. The caller is
+    responsible for delivering stdout — Hermes delivers it to chat natively.
+    """
+    try:
+        fired = watch.eval_watches()
+    except WatchError as e:
+        print(f"error: {e}")
+        return 1
+    if not fired:
+        return 0
+    lines = ["🚨 *polyodds alert*", ""]
+    for a in fired:
+        lines.append(f"*{a.name}*")
+        lines.append(f"  Yes {a.yes_pct}%  ·  `id: {a.condition_id}`")
+        for r in a.reasons:
+            lines.append(f"  • {r}")
+        lines.append("")
+    print("\n".join(lines).strip())
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="polyodds",
@@ -208,6 +233,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     a = sub.add_parser("check", help="check watches against live prices; fires alerts")
     a.set_defaults(func=cmd_check)
+
+    n = sub.add_parser("notify", help="check + format alert block for chat delivery (cron)")
+    n.set_defaults(func=cmd_notify)
 
     return p
 

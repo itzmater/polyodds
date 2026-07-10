@@ -27,7 +27,17 @@ from typing import Dict, List, Optional
 from . import client
 from .client import PolyOddsError
 
-DEFAULT_PATH = os.path.join(os.path.expanduser("~"), ".polyodds", "watchlist.json")
+
+def _default_watchlist_path() -> str:
+    # Allow overriding the watchlist location, e.g. a repo-committed file that
+    # survives ephemeral sandbox resets. Falls back to ~/.polyodds/watchlist.json.
+    return os.environ.get(
+        "POLYODDS_WATCHLIST",
+        os.path.join(os.path.expanduser("~"), ".polyodds", "watchlist.json"),
+    )
+
+
+DEFAULT_PATH = _default_watchlist_path()
 
 
 class WatchError(Exception):
@@ -123,12 +133,18 @@ class FiredAlert:
     reasons: List[str] = field(default_factory=list)
 
 
-def eval_watches(path: str = DEFAULT_PATH) -> List[FiredAlert]:
+def eval_watches(path: str | None = None) -> List[FiredAlert]:
     """Fetch live prices for every watch and return the ones that fired.
 
     Maintains ``last_yes`` for each watch so the ``moved`` trigger works
     across invocations.
+
+    ``path`` defaults to ``DEFAULT_PATH`` (which honors the POLYODDS_WATCHLIST
+    env var). Read inside the function — not as a default arg value — so the
+    env override is always respected.
     """
+    if path is None:
+        path = DEFAULT_PATH
     watches = load_watches(path)
     if not watches:
         return []
